@@ -1,0 +1,1236 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SEVENFRAME — Studio de producción audiovisual</title>
+<meta name="description" content="SEVENFRAME. Productora multimedia: cine, fotografía, post-producción y contenido de marca.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:ital,wght@0,400;0,500;0,600;0,700;0,800;1,500;1,600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --black:#0a0a0a;
+    --panel:#121212;
+    --panel-2:#171717;
+    --line: rgba(244,244,239,0.10);
+    --line-strong: rgba(244,244,239,0.22);
+    --white:#f4f4ef;
+    --muted:#94948d;
+    --muted-2:#5c5c57;
+    --green:#46e02c;
+    --green-dim: rgba(70,224,44,0.14);
+    --green-glow: rgba(70,224,44,0.35);
+    --display: 'Anton', sans-serif;
+    --body: 'Archivo', sans-serif;
+    --mono: 'JetBrains Mono', monospace;
+    --ease: cubic-bezier(.16,.84,.44,1);
+  }
+
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    background:var(--black);
+    color:var(--white);
+    font-family:var(--body);
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+  ::selection{ background:var(--green); color:#0a0a0a; }
+
+  img,svg{display:block;max-width:100%;}
+  a{color:inherit; text-decoration:none;}
+  ul{list-style:none;}
+
+  .wrap{ max-width:1400px; margin:0 auto; padding:0 40px; }
+
+  /* film grain */
+  .grain{
+    position:fixed; inset:0; z-index:200; pointer-events:none;
+    opacity:0.05; mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  }
+
+  /* ===== viewfinder HUD ===== */
+  .hud{ position:fixed; inset:0; z-index:150; pointer-events:none; }
+  .hud .corner{ position:absolute; width:26px; height:26px; border-color:var(--green); opacity:.85; }
+  .hud .corner.tl{ top:18px; left:18px; border-top:2px solid; border-left:2px solid; }
+  .hud .corner.tr{ top:18px; right:18px; border-top:2px solid; border-right:2px solid; }
+  .hud .corner.bl{ bottom:18px; left:18px; border-bottom:2px solid; border-left:2px solid; }
+  .hud .corner.br{ bottom:18px; right:18px; border-bottom:2px solid; border-right:2px solid; }
+
+  .hud .tc{
+    position:absolute; bottom: 20px; right:25px;
+    font-family:var(--mono); font-size:11px; letter-spacing:.08em;
+    color:var(--muted); display:flex; align-items:center; gap:8px;
+    white-space:nowrap;
+  }
+  .hud .tc .dot{ width:7px; height:7px; border-radius:50%; background:var(--green); box-shadow:0 0 8px var(--green-glow); animation:pulse 1.4s infinite; }
+  .hud .tc .lbl{ color:var(--green); }
+  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:.25;} }
+
+  .hud .fstop{
+    position:absolute; bottom:20px; left:56px;
+    font-family:var(--mono); font-size:11px; letter-spacing:.06em; color:var(--muted-2);
+  }
+  @media (max-width:900px){
+    .hud .tc{
+      display:flex;
+      bottom:20px;
+      right:20px;
+      font-size:9px;
+      gap:6px;
+    }
+    .hud .tc .dot{ width:6px; height:6px; }
+    .hud .fstop{ display:none; }
+  }
+  @media (max-width:720px){
+    .hud .tc{
+      bottom:20px;
+      right:25px;
+      font-size:9px;
+    }
+    .hud .corner{ width:16px; height:16px; }
+  }
+
+  .hud .reel{
+    position:absolute; top:0; left:0; right:0; height:2px; background:rgba(244,244,239,0.06);
+  }
+  .hud .reel-fill{ height:100%; width:0%; background:var(--green); box-shadow:0 0 10px var(--green-glow); transition:width .1s linear; }
+
+  /* custom viewfinder cursor */
+  .cursor{
+    position:fixed; top:0; left:0; width:46px; height:46px; z-index:220; pointer-events:none;
+    transform:translate(-50%,-50%); opacity:0; transition:opacity .25s ease, width .3s var(--ease), height .3s var(--ease);
+  }
+  .cursor svg{ width:100%; height:100%; }
+  .cursor.show{ opacity:1; }
+  .cursor.big{ width:84px; height:84px; }
+  .cursor-label{
+    position:absolute; top:100%; left:50%; transform:translateX(-50%); margin-top:6px;
+    font-family:var(--mono); font-size:9px; letter-spacing:.14em; color:var(--green); white-space:nowrap;
+    opacity:0; transition:opacity .25s ease;
+  }
+  .cursor.big .cursor-label{ opacity:1; }
+  @media (hover:none), (pointer:coarse){ .cursor{ display:none; } }
+
+  /* ===== nav ===== */
+  header{
+    position:fixed; top:0; left:0; right:0; z-index:100;
+    padding:22px 0;
+    transition: background .4s var(--ease), border-color .4s var(--ease), padding .3s var(--ease);
+    border-bottom:1px solid transparent;
+  }
+  header.solid{
+    background:rgba(10,10,10,0.86); backdrop-filter:blur(10px);
+    border-bottom:1px solid var(--line); padding:14px 0;
+  }
+  header .wrap{ display:flex; align-items:center; justify-content:space-between; }
+
+  .logo{ display:flex; align-items:center; gap:2px; }
+  .logo-word{
+    font-family:var(--display); font-size:22px; letter-spacing:.01em;
+    display:flex; transform:skewX(-8deg);
+  }
+  .logo-word span{ display:inline-block; }
+  .logo-img{ height:32px; width:auto; max-width:100%; object-fit:contain; }
+  @media (max-width:640px){ .logo-img{ height:26px; } }
+  .logo-word .v{ color:var(--green); }
+  .logo-sub{
+    font-family:var(--mono); font-size:9px; letter-spacing:.28em; color:var(--muted);
+    margin-top:2px; text-transform:uppercase; transform:skewX(-8deg);
+  }
+
+  nav.primary{ display:flex; align-items:center; gap:44px; }
+  nav.primary ul{ display:flex; gap:36px; }
+  nav.primary a{
+    font-family:var(--mono); font-size:12px; letter-spacing:.08em; text-transform:uppercase;
+    color:var(--muted); position:relative; padding-bottom:4px;
+  }
+  nav.primary a::after{
+    content:''; position:absolute; left:0; bottom:0; width:0; height:1px; background:var(--green);
+    transition:width .3s var(--ease);
+  }
+  nav.primary a:hover{ color:var(--white); }
+  nav.primary a:hover::after{ width:100%; }
+
+  .nav-cta{
+    font-family:var(--mono); font-size:12px; letter-spacing:.06em; text-transform:uppercase;
+    color:var(--black); background:var(--green); padding:10px 18px; border-radius:2px;
+    transition:transform .25s var(--ease), box-shadow .25s var(--ease);
+  }
+  .nav-cta:hover{ transform:translateY(-2px); box-shadow:0 8px 24px var(--green-dim); }
+
+  .burger{
+    display:none;
+    flex-direction:column;
+    gap:5px;
+    cursor:pointer;
+    z-index:120;
+    position:relative;
+    width:24px;
+    height:24px;
+    justify-content:center;
+  }
+  .burger span{
+    width:24px;
+    height:2px;
+    background:var(--white);
+    transition:transform .3s var(--ease), opacity .2s ease;
+    transform-origin:center;
+  }
+  .burger.active span:nth-child(1){ transform:translateY(7px) rotate(45deg); }
+  .burger.active span:nth-child(2){ opacity:0; }
+  .burger.active span:nth-child(3){ transform:translateY(-7px) rotate(-45deg); }
+
+  @media (max-width:900px){
+    nav.primary ul, .nav-cta{ display:none; }
+    .burger{ display:flex; }
+  }
+
+  /* ===== hero ===== */
+  .hero{
+    min-height:100svh; position:relative; display:flex; flex-direction:column; justify-content:flex-end;
+    padding:160px 0 64px; overflow:hidden;
+    background:
+      radial-gradient(ellipse 80% 50% at 50% 0%, rgba(70,224,44,0.07), transparent 60%),
+      linear-gradient(180deg, #0a0a0a 0%, #0d0d0d 60%, #0a0a0a 100%);
+  }
+  .hero .wrap{ will-change:transform, opacity; }
+  .hero::before{
+    content:''; position:absolute; inset:0; z-index:0; opacity:.5;
+    background-image:
+      repeating-linear-gradient(180deg, rgba(244,244,239,0.025) 0px, rgba(244,244,239,0.025) 1px, transparent 1px, transparent 3px);
+  }
+  .hero-frame-count{
+    position:relative; z-index:2; font-family:var(--mono); font-size:12px; letter-spacing:.15em;
+    color:var(--muted); text-transform:uppercase; margin-bottom:26px; display:flex; align-items:center; gap:10px;
+  }
+  .hero-frame-count::before{ content:''; width:34px; height:1px; background:var(--green); }
+
+  .hero h1{
+    position:relative; z-index:2;
+    font-family:var(--display); font-weight:400;
+    font-size:clamp(64px, 13.5vw, 190px);
+    line-height:0.86; letter-spacing:-0.01em;
+    text-transform:uppercase;
+  }
+  .hero h1 .line{ display:block; overflow:hidden; }
+  .hero h1 .line span{ display:inline-block; transform:translateY(110%); animation:riseUp 1s var(--ease) forwards; }
+  .hero h1 .line:nth-child(2) span{ animation-delay:.08s; color:var(--green); }
+  @keyframes riseUp{ to{ transform:translateY(0); } }
+
+  .hero-sub{
+    position:relative; z-index:2; margin-top:34px; max-width:560px;
+    font-size:18px; line-height:1.6; color:var(--muted); font-weight:400;
+  }
+  .hero-sub em{ color:var(--white); font-style:italic; font-weight:600; }
+
+  .hero-meta{
+    position:relative; z-index:2; margin-top:52px; display:flex; gap:56px; flex-wrap:wrap;
+    border-top:1px solid var(--line); padding-top:22px;
+  }
+  .hero-meta div{ font-family:var(--mono); font-size:11px; letter-spacing:.06em; color:var(--muted-2); text-transform:uppercase; }
+  .hero-meta strong{ display:block; font-family:var(--body); font-size:14px; color:var(--white); font-weight:600; margin-top:6px; letter-spacing:0; text-transform:none; }
+
+  /* ===== marquee ===== */
+  .marquee-wrap{
+    border-top:1px solid var(--line); border-bottom:1px solid var(--line);
+    background:var(--panel); overflow:hidden; padding:20px 0;
+  }
+  .marquee{ display:flex; width:max-content; animation:scroll 32s linear infinite; }
+  .marquee:hover{ animation-play-state:paused; }
+  .marquee span{
+    font-family:var(--display); font-size:26px; text-transform:uppercase; letter-spacing:.02em;
+    color:transparent; -webkit-text-stroke:1px var(--muted-2); padding:0 28px; white-space:nowrap;
+    display:flex; align-items:center; gap:28px;
+  }
+  .marquee span.on{ color:var(--green); -webkit-text-stroke:1px var(--green); }
+  @keyframes scroll{ from{ transform:translateX(0); } to{ transform:translateX(-50%); } }
+
+  /* ===== section shell ===== */
+  section{ position:relative; }
+  .eyebrow{
+    font-family:var(--mono); font-size:12px; letter-spacing:.18em; text-transform:uppercase; color:var(--green);
+    display:flex; align-items:center; gap:10px; margin-bottom:18px;
+  }
+  .eyebrow::before{ content:'●'; font-size:8px; }
+  .section-head{ padding:120px 0 56px; }
+  .section-head h2{
+    font-family:var(--display); font-weight:400; text-transform:uppercase;
+    font-size:clamp(38px,5.4vw,72px); line-height:0.95; max-width:900px;
+  }
+  .section-head p{ margin-top:22px; max-width:520px; color:var(--muted); font-size:16px; line-height:1.7; }
+
+  .reveal{
+    will-change:opacity, transform;
+    opacity:0;
+    transform:translateY(42px) scale(.97);
+    transition:opacity .75s var(--ease), transform .75s var(--ease);
+  }
+  .reveal.is-visible{
+    opacity:1;
+    transform:translateY(0) scale(1);
+  }
+
+  /* Animación para TODOS los elementos de la página */
+  .page-reveal{
+    opacity:0;
+    transform:translateY(28px);
+    transition:opacity .7s var(--ease), transform .7s var(--ease);
+  }
+  .page-reveal.is-visible{
+    opacity:1;
+    transform:translateY(0);
+  }
+
+  /* ===== work ===== */
+  .work{
+    padding-bottom:60px;
+    padding-left:clamp(12px, 3.5vw, 56px);
+    padding-right:clamp(12px, 3.5vw, 56px);
+  }
+  .work-row{ display:grid; gap:12px; margin-bottom:12px; }
+  .work-row.full{ grid-template-columns:1fr; }
+  .work-row.split{ grid-template-columns:1.4fr 1fr; }
+  @media (max-width:800px){ .work-row.split{ grid-template-columns:1fr; } }
+
+  .frame{
+    position:relative; overflow:hidden; aspect-ratio:16/9.5; background:#111;
+    cursor:pointer;
+    width:100%;
+    max-height:78vh; /* evita que en pantallas muy grandes/anchas el frame se vea gigante */
+  }
+  a.frame{ display:block; }
+  .work-row.split .frame{ aspect-ratio:4/5; max-height:70vh; }
+
+  @media (max-width:640px){
+    .frame{ aspect-ratio:4/3; max-height:60vh; }
+    .work-row.split .frame{ aspect-ratio:1/1; max-height:50vh; }
+  }
+  .frame .tex{
+    position:absolute; inset:-14% -6%; background-size:cover; background-position:center;
+    transition:transform .5s var(--ease), filter .6s var(--ease);
+    filter:saturate(0.9) contrast(1.05);
+    will-change:transform;
+  }
+  .frame:hover .tex{ filter:saturate(1.05) contrast(1.1); }
+  .frame-info{ transition:transform .5s var(--ease); }
+  .frame:hover .frame-info h3{ transform:translateX(6px); }
+  .frame-info h3{ transition:transform .45s var(--ease); }
+  .frame::before{
+    content:''; position:absolute; inset:0; z-index:1; opacity:0;
+    background:linear-gradient(135deg, transparent 40%, var(--green-dim) 100%);
+    transition:opacity .4s var(--ease);
+  }
+  .frame:hover::before{ opacity:1; }
+  .frame::after{ content:''; position:absolute; inset:0; background:linear-gradient(180deg, rgba(0,0,0,0) 40%, rgba(0,0,0,0.72) 100%); }
+  .frame-info{ position:absolute; left:0; right:0; bottom:0; z-index:2; padding:26px 30px; display:flex; justify-content:space-between; align-items:flex-end; gap:14px; }
+  .frame-info h3{ font-family:var(--display); font-weight:400; font-size:clamp(22px,2.6vw,38px); text-transform:uppercase; letter-spacing:.01em; }
+  .frame-tag{ font-family:var(--mono); font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--green); white-space:nowrap; padding-bottom:6px; }
+  .frame-num{
+    position:absolute; top:22px; left:26px; z-index:2; font-family:var(--mono); font-size:11px;
+    color:rgba(244,244,239,0.75); letter-spacing:.06em;
+  }
+
+
+  /* ===== project videos ===== */
+  .frame-video{
+    position:absolute;
+    inset:-1px;
+    width:calc(100% + 2px);
+    height:calc(100% + 2px);
+    object-fit:cover;
+    display:block;
+    background:#111;
+    transform:scale(1.001);
+  }
+
+  .frame-video-wrap{
+    position:absolute;
+    inset:0;
+    overflow:hidden;
+    background:#111;
+  }
+
+  .frame-video-sound{
+    position:absolute;
+    right:22px;
+    top:20px;
+    z-index:5;
+    width:38px;
+    height:38px;
+    border:1px solid rgba(244,244,239,.45);
+    border-radius:50%;
+    background:rgba(10,10,10,.58);
+    color:var(--white);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    cursor:pointer;
+    backdrop-filter:blur(7px);
+    transition:background .25s var(--ease), border-color .25s var(--ease), transform .25s var(--ease);
+  }
+
+  .frame-video-sound:hover{
+    background:var(--green);
+    color:var(--black);
+    border-color:var(--green);
+    transform:scale(1.08);
+  }
+
+  .frame-video-sound svg{
+    width:17px;
+    height:17px;
+    max-width:none;
+  }
+
+  .frame-video-sound .sound-off{ display:none; }
+  .frame-video-sound.muted .sound-on{ display:none; }
+  .frame-video-sound.muted .sound-off{ display:block; }
+
+  @media (max-width:640px){
+    .frame-video-sound{
+      right:14px;
+      top:14px;
+      width:34px;
+      height:34px;
+    }
+    .frame-info{ padding:18px 18px; gap:8px; }
+    .frame-num{ top:14px; left:16px; font-size:10px; }
+  }
+
+  .work-row.split .frame.frame-vertical{
+    aspect-ratio:2/3; /* misma proporción que las fotos del equipo */
+    max-height:680px;
+  }
+
+  @media (max-width:640px){
+    .work-row.split .frame.frame-vertical{
+      aspect-ratio:2/3;
+      max-height:520px;
+    }
+  }
+
+  /* ===== carrusel de fotos dentro de un frame ===== */
+  .frame-carousel{ position:absolute; inset:0; overflow:hidden; }
+  .carousel-track{
+    display:flex; width:100%; height:100%;
+    transition:transform .5s var(--ease); will-change:transform;
+  }
+  .carousel-slide{
+    min-width:100%; height:100%; flex-shrink:0;
+    background-size:cover; background-position:center; background-color:#111;
+  }
+  .carousel-arrow{
+    position:absolute; top:50%; transform:translateY(-50%); z-index:4;
+    width:36px; height:36px; border-radius:50%;
+    border:1px solid rgba(244,244,239,.45); background:rgba(10,10,10,.58); color:var(--white);
+    display:flex; align-items:center; justify-content:center;
+    font-size:20px; line-height:1; padding-bottom:2px;
+    cursor:pointer; backdrop-filter:blur(7px);
+    transition:background .25s var(--ease), border-color .25s var(--ease), transform .25s var(--ease);
+  }
+  .carousel-arrow:hover{ background:var(--green); color:var(--black); border-color:var(--green); transform:translateY(-50%) scale(1.08); }
+  .carousel-arrow.prev{ left:14px; }
+  .carousel-arrow.next{ right:14px; }
+  .carousel-counter{
+    position:absolute; top:22px; right:26px; z-index:4;
+    font-family:var(--mono); font-size:11px; letter-spacing:.06em; color:rgba(244,244,239,.75);
+  }
+  @media (max-width:640px){
+    .carousel-arrow{ width:30px; height:30px; font-size:16px; }
+    .carousel-arrow.prev{ left:10px; }
+    .carousel-arrow.next{ right:10px; }
+    .carousel-counter{ top:14px; right:16px; font-size:10px; }
+  }
+
+  /* ===== capabilities ===== */
+  .caps{ padding:110px 0; border-top:1px solid var(--line); }
+  .caps-grid{ display:grid; grid-template-columns:repeat(4,1fr); border-top:1px solid var(--line); border-left:1px solid var(--line); }
+  .cap{ border-right:1px solid var(--line); border-bottom:1px solid var(--line); padding:36px 28px; min-height:220px; display:flex; flex-direction:column; justify-content:space-between; transition:background .35s var(--ease), transform .25s var(--ease); }
+  .cap:hover{ background:var(--panel); }
+  .cap .cn{ font-family:var(--mono); font-size:12px; color:var(--muted-2); }
+  .cap h4{ font-family:var(--display); font-weight:400; font-size:26px; text-transform:uppercase; margin-top:60px; }
+  .cap p{ margin-top:12px; font-size:14px; color:var(--muted); line-height:1.6; }
+  @media (max-width:900px){ .caps-grid{ grid-template-columns:1fr 1fr; } }
+  @media (max-width:560px){ .caps-grid{ grid-template-columns:1fr; } }
+
+  /* ===== team ===== */
+  .team{ padding:110px 0 120px; border-top:1px solid var(--line); }
+  .team-intro{ display:flex; justify-content:space-between; align-items:flex-end; gap:30px; margin-bottom:60px; flex-wrap:wrap; }
+  .team-intro p{ max-width:440px; color:var(--muted); font-size:16px; line-height:1.7; }
+
+  .team-grid{ display:grid; grid-template-columns:repeat(6,1fr); gap:2px; background:var(--line); border:1px solid var(--line); }
+  @media (max-width:1100px){ .team-grid{ grid-template-columns:repeat(3,1fr); } }
+  @media (max-width:680px){ .team-grid{ grid-template-columns:repeat(2,1fr); } }
+  @media (max-width:420px){ .team-grid{ grid-template-columns:1fr; } }
+
+  .member{ display:block; background:var(--black); position:relative; padding:0; overflow:hidden; transition:transform .25s var(--ease); }
+  a.member{ cursor:pointer; }
+  a.member:hover .member-body h4{ color:var(--green); }
+  .member-photo{
+    aspect-ratio:2/3; position:relative; overflow:hidden;
+    display:flex; align-items:center; justify-content:center;
+  }
+
+  .member-photo::before{
+    content:''; position:absolute; inset:0;
+    transition:transform .6s var(--ease);
+  }
+  .member:hover .member-photo::before{ transform:scale(1.05); }
+  .member-photo::after{
+    content:''; position:absolute; inset:0; border:1px solid transparent;
+    box-shadow:inset 0 0 0 0 var(--green); transition:box-shadow .35s var(--ease);
+  }
+  .member:hover .member-photo::after{ box-shadow:inset 0 0 0 2px var(--green); }
+  .member-frame-tag{
+    position:absolute; top:16px; left:16px; font-family:var(--mono); font-size:10px;
+    color:var(--green); letter-spacing:.1em; z-index:3; display:flex; align-items:center; gap:6px;
+  }
+  .member-frame-tag::before{ content:''; width: 5px; height:5px; border-radius:50%; background:var(--green); }
+  .member-body{ padding:22px 22px 26px; border-top:1px solid var(--line); }
+  .member-body h4{ font-family:var(--display); font-weight:400; font-size:22px; text-transform:uppercase; }
+  .member-role{ font-family:var(--mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--green); margin-top:6px; }
+  .member-bio{ font-size:13.5px; color:var(--muted); margin-top:12px; line-height:1.6; }
+
+  /* duotone placeholder backgrounds for members/work using CSS gradients */
+  .g1{ background:linear-gradient(150deg,#183214 0%, #0a0a0a 55%, #0a0a0a 100%); }
+  .g2{ background:linear-gradient(150deg,#101d10 0%, #0a0a0a 60%); }
+  .g3{ background:linear-gradient(160deg,#12220f 10%, #0a0a0a 65%); }
+  .g4{ background:linear-gradient(155deg,#0f1f14 0%, #0a0a0a 60%); }
+  .g5{ background:linear-gradient(160deg,#142c12 5%, #0a0a0a 55%); }
+  .g6{ background:linear-gradient(150deg,#0e1c11 0%, #0a0a0a 60%); }
+  .g7{ background:linear-gradient(160deg,#132513 0%, #0a0a0a 55%); }
+
+
+
+  /* ===== about / pull quote ===== */
+  .about{ padding:130px 0; border-top:1px solid var(--line); position:relative; }
+  .about .wrap{ display:grid; grid-template-columns:0.9fr 1.1fr; gap:60px; }
+  @media (max-width:900px){ .about .wrap{ grid-template-columns:1fr; gap:36px; } }
+  .about-label{ font-family:var(--mono); font-size:12px; letter-spacing:.15em; color:var(--muted); text-transform:uppercase; margin-bottom:20px; }
+  .about-photo{
+    aspect-ratio:4/5; background-size:cover; background-position:center;
+    border:1px solid var(--line);
+  }
+  .about-quote{
+    font-family:var(--display); font-weight:400; text-transform:uppercase;
+    font-size:clamp(28px,3.6vw,48px); line-height:1.15;
+  }
+  .about-quote .accent{ color:var(--green); font-style:italic; font-family:var(--body); font-weight:600; text-transform:none; }
+  .about-foot{ margin-top:30px; font-size:15px; color:var(--muted); line-height:1.7; max-width:520px; }
+
+  /* ===== contact / footer ===== */
+  .contact{ border-top:1px solid var(--line); padding:120px 0 0; }
+  .contact-inner{ text-align:center; padding-bottom:100px; }
+  .contact .eyebrow{ justify-content:center; }
+  .contact h2{
+    font-family:var(--display); font-weight:400; text-transform:uppercase;
+    font-size:clamp(48px,9vw,140px); line-height:0.92;
+  }
+  .contact-email{
+    display:inline-flex; align-items:center; gap:14px; margin-top:36px;
+    font-family:var(--body); font-weight:600; font-size:20px; padding-bottom:6px;
+    border-bottom:1px solid var(--line-strong);
+    transition:border-color .3s var(--ease), color .3s var(--ease);
+  }
+  .contact-email:hover{ color:var(--green); border-color:var(--green); }
+
+  footer{ border-top:1px solid var(--line); padding:34px 0; }
+  footer .wrap{ display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px; }
+  footer p, footer a{ font-family:var(--mono); font-size:11px; letter-spacing:.05em; color:var(--muted-2); text-transform:uppercase; }
+  footer nav{ display:flex; gap:24px; }
+  footer a:hover{ color:var(--green); }
+
+    /* Estilo general del icono */
+    /* 1. Estilos para el contenedor del menú */
+  .mi-navegacion {
+    display: flex;            /* Alinea los elementos en línea */
+    gap: 20px;                /* Añade espacio de separación si pones más iconos */
+    align-items: center;      /* Centra verticalmente los elementos */   
+    padding: 15px;            /* Espaciado interno del menú */
+  }
+
+  /* 2. Estilos específicos para el icono de Instagram */
+  .instagram-link {
+    color:var(--white);
+    font-size: 18px;          /* Tamaño del icono */
+    text-decoration: none;    /* Quita cualquier línea de enlace */
+    transition: transform 0.3s, color 0.3s; /* Suaviza las animaciones */
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+  }
+
+  /* 3. Efecto al pasar el cursor (Hover) */
+  .instagram-link:hover {
+    color:var(--green);
+    transform: scale(1.15);    /* Hace que el icono crezca un 10% sutilmente */
+  }
+
+
+
+  /* mobile menu overlay */
+  .mobile-menu{
+    position:fixed; inset:0; background:var(--black); z-index:110;
+    display:flex; flex-direction:column; justify-content:center; padding:0 40px;
+    transform:translateY(-100%); transition:transform .5s var(--ease);
+  }
+  .mobile-menu.open{ transform:translateY(0); }
+  .mobile-menu ul{ display:flex; flex-direction:column; gap:22px; }
+  .mobile-menu a{ font-family:var(--display); font-size:44px; text-transform:uppercase; }
+  .mobile-menu .nav-cta{ margin-top:34px; width:fit-content; }
+
+  @media (max-width:640px){
+    .wrap{ padding:0 22px; }
+    .work{
+      padding-left:12px;
+      padding-right:12px;
+    }
+    .work-row{
+      gap:10px;
+      margin-bottom:10px;
+    }
+    .caps{ padding:80px 0; }
+    .section-head{ padding:80px 0 40px; }
+    .about, .team, .contact{ padding-top:80px; }
+  }
+</style>
+</head>
+<body>
+
+  <div class="grain"></div>
+  <div class="hud">
+    <span class="corner tl"></span><span class="corner tr"></span>
+    <span class="corner bl"></span><span class="corner br"></span>
+    <div class="tc"><span class="dot"></span><span class="lbl">ROLLING</span><span id="timecode">00:00:00:00</span></div>
+    <div class="fstop">f/2.8 · ISO 800 · 24FPS</div>
+    <div class="reel"><div class="reel-fill" id="reelFill"></div></div>
+  </div>
+
+  <div class="cursor" id="cursor">
+    <svg viewBox="0 0 46 46" fill="none">
+      <circle cx="23" cy="23" r="21" stroke="var(--green)" stroke-width="1"/>
+      <path d="M23 2v8M23 36v8M2 23h8M36 23h8" stroke="var(--green)" stroke-width="1"/>
+    </svg>
+    <div class="cursor-label">VER</div>
+  </div>
+
+  <header id="siteHeader">
+    <div class="wrap">
+      <a href="#top" class="logo">
+        <div>
+          <div class="logo-word">
+            <img src="logo-seven.jpeg" alt="sevenframe" width="60" height="40" class="logo-img">
+          </div>
+        </div>
+      </a>
+      <nav class="primary">
+        <ul>
+          <li><a href="#trabajo">Trabajo</a></li>
+          <li><a href="#estudio">Estudio</a></li>
+          <li><a href="#equipo">Equipo</a></li>
+          <li><a href="#nosotros">Nosotros</a></li>
+        </ul>
+        <a href="#contacto" class="nav-cta">Iniciar proyecto</a>
+      </nav>
+      <div class="burger" id="burger" role="button" tabindex="0" aria-label="Abrir menú" title="Abrir menú"><span></span><span></span><span></span></div>
+    </div>
+  </header>
+
+  <div class="mobile-menu" id="mobileMenu">
+    <ul>
+      <li><a href="#trabajo">Trabajo</a></li>
+      <li><a href="#estudio">Estudio</a></li>
+      <li><a href="#equipo">Equipo</a></li>
+      <li><a href="#nosotros">Nosotros</a></li>
+      <li><a href="#contacto">Contacto</a></li>
+    </ul>
+    <a href="#contacto" class="nav-cta">Iniciar proyecto</a>
+  </div>
+
+  <main id="top">
+
+    <!-- HERO -->
+    <section class="hero">
+      <div class="wrap">
+        <div class="hero-frame-count">Bogotá · Productora multimedia · Est. 2026</div>
+        <h1>
+          <span class="line"><span>SEVEN</span></span>
+          <span class="line"><span>FRAME</span></span>
+        </h1>
+        <p class="hero-sub">De cada rollo, guardamos <em>un solo fotograma</em>: el que sostiene toda la historia. Desarrollo web, audiovisual, diseño gráfico y animación bajo un mismo estudio.</p>
+        <div class="hero-meta">
+          <div>Disciplinas<strong>Web / Audiovisual / Diseño / Motion</strong></div>
+          <div>Alcance<strong>Bogotá — LatAm</strong></div>
+          <div>Disponibilidad<strong>Nuevos proyectos 2026</strong></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- MARQUEE -->
+    <div class="marquee-wrap">
+      <div class="marquee" id="marquee">
+        <span>Desarrollo Web<span class="on">●</span></span>
+        <span>Audiovisual<span class="on">●</span></span>
+        <span>Diseño Gráfico<span class="on">●</span></span>
+        <span>Animación<span class="on">●</span></span>
+        <span>Branding<span class="on">●</span></span>
+        <span>Desarrollo Web<span class="on">●</span></span>
+        <span>Audiovisual<span class="on">●</span></span>
+        <span>Diseño Gráfico<span class="on">●</span></span>
+        <span>Animación<span class="on">●</span></span>
+        <span>Branding<span class="on">●</span></span>
+      </div>
+    </div>
+
+    <!-- WORK -->
+    <section class="work" id="trabajo">
+      <div class="wrap section-head reveal">
+        <div class="eyebrow">Selección de trabajo</div>
+        <h2>Historias que ya rodamos.</h2>
+        <p>Una muestra de proyectos recientes en cine de marca, documental y fotografía de campaña. El resto del carrete, con gusto, en una llamada.</p>
+      </div>
+
+      <!-- ===== PROYECTOS =====
+           Para agregar un video:
+           1. Pon el archivo .mp4 en la misma carpeta del HTML (o en una carpeta como videos/).
+           2. Cambia solamente el valor de src.
+           3. El video se reproduce automáticamente al entrar en pantalla,
+              se pausa al salir y empieza de nuevo cuando vuelves a él.
+           4. No tiene controles de play/pausa: solamente aparece el botón de sonido.
+           ================================================ -->
+
+      <div class="work-row full reveal">
+        <div class="frame">
+          <!-- VIDEO 1 -->
+          <div class="frame-video-wrap">
+            <video class="frame-video project-video" autoplay muted loop playsinline preload="metadata">
+              <source src="videos/spot.mp4" type="video/mp4">
+            </video>
+
+            <button class="frame-video-sound muted" type="button" aria-label="Activar sonido" title="Activar sonido">
+              <svg class="sound-on" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M4 9v6h4l5 4V5L8 9H4Z" fill="currentColor"/>
+                <path d="M16 9.5c1.2 1.2 1.2 3.8 0 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                <path d="M18.5 7c2.6 2.5 2.6 7.5 0 10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              </svg>
+              <svg class="sound-off" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M4 9v6h4l5 4V5L8 9H4Z" fill="currentColor"/>
+                <path d="m17 9 4 6M21 9l-4 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              </svg>
+            </button>
+          </div>
+
+          <div class="frame-num">CAM_A / 001</div>
+          <div class="frame-info"><h3>Spot (Canchero de barrio)</h3><span class="frame-tag">Publicidad</span></div>
+        </div>
+      </div>
+
+      <div class="work-row split reveal">
+        <div class="frame">
+          <!-- VIDEO 2: cambia videos/proyecto-2.mp4 por tu archivo -->
+          <div class="frame-video-wrap">
+            <video class="frame-video project-video" autoplay muted loop playsinline preload="metadata">
+              <source src="videos/" type="video/mp4">
+            </video>
+
+            <button class="frame-video-sound muted" type="button" aria-label="Activar sonido" title="Activar sonido">
+              <svg class="sound-on" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M4 9v6h4l5 4V5L8 9H4Z" fill="currentColor"/>
+                <path d="M16 9.5c1.2 1.2 1.2 3.8 0 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                <path d="M18.5 7c2.6 2.5 2.6 7.5 0 10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              </svg>
+              <svg class="sound-off" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M4 9v6h4l5 4V5L8 9H4Z" fill="currentColor"/>
+                <path d="m17 9 4 6M21 9l-4 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              </svg>
+            </button>
+          </div>
+
+          <div class="frame-num">CAM_B / 002</div>
+          <div class="frame-info"><h3>Altitud</h3><span class="frame-tag">Documental</span></div>
+        </div>
+
+        <div class="frame">
+          <!-- FOTO 3 -->
+          <div class="tex g3" style="background-image:url('');"></div>
+          <div class="frame-num">CAM_A / 003</div>
+          <div class="frame-info"><h3>escena</h3><span class="frame-tag">Cine</span></div>
+        </div>
+      </div>
+
+      <div class="work-row full reveal">
+        <div class="frame">
+          <!-- VIDEO 3: cambia videos/proyecto-3.mp4 por tu archivo -->
+          <div class="frame-video-wrap">
+            <video class="frame-video project-video" autoplay muted loop playsinline preload="metadata">
+              <source src="videos/maria-escena.mp4" type="video/mp4">
+            </video>
+
+            <button class="frame-video-sound muted" type="button" aria-label="Activar sonido" title="Activar sonido">
+              <svg class="sound-on" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M4 9v6h4l5 4V5L8 9H4Z" fill="currentColor"/>
+                <path d="M16 9.5c1.2 1.2 1.2 3.8 0 5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                <path d="M18.5 7c2.6 2.5 2.6 7.5 0 10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              </svg>
+              <svg class="sound-off" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path d="M4 9v6h4l5 4V5L8 9H4Z" fill="currentColor"/>
+                <path d="m17 9 4 6M21 9l-4 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              </svg>
+            </button>
+          </div>
+
+          <div class="frame-num">CAM_C / 004</div>
+          <div class="frame-info"><h3>Escena (Libro "Maria")</h3><span class="frame-tag">Escena</span></div>
+        </div>
+      </div>
+
+      <div class="work-row split reveal">
+        <div class="frame">
+          <div class="tex g6" style="background-image:url('');"></div>
+          <div class="frame-num">CAM_B / 006</div>
+          <div class="frame-info"><h3>Litoral</h3><span class="frame-tag">Fotografía</span></div>
+        </div>
+
+        <div class="frame frame-vertical">
+          <!-- CARRUSEL — 5 fotos verticales de "Larga Exposición".
+               Sube tus 5 fotos a la misma carpeta del HTML con estos nombres exactos:
+               expo-1.jpg, expo-2.jpg, expo-3.jpg, expo-4.jpg, expo-5.jpg
+               (podés cambiar la extensión a .jpeg o .png, pero actualizá la línea de abajo) -->
+          <div class="frame-carousel" data-carousel>
+            <div class="carousel-track">
+              <div class="carousel-slide" style="background-image:url('img/DSC_8838.jpg')"></div>
+              <div class="carousel-slide" style="background-image:url('img/DSC_8846.jpg')"></div>
+              <div class="carousel-slide" style="background-image:url('img/DSC_8859.jpg')"></div>
+              <div class="carousel-slide" style="background-image:url('img/DSC_8870.jpg')"></div>
+              <div class="carousel-slide" style="background-image:url('img/DSC_8877.jpg')"></div>
+            </div>
+            <button class="carousel-arrow prev" type="button" aria-label="Foto anterior">‹</button>
+            <button class="carousel-arrow next" type="button" aria-label="Foto siguiente">›</button>
+            <div class="carousel-counter"><span class="current">1</span> / 5</div>
+          </div>
+          <div class="frame-num">CAM_A / 005</div>
+          <div class="frame-info"><h3>Fotos producto Canchero</h3><span class="frame-tag">Moda</span></div>
+        </div>
+      </div>
+
+      <div class="work-row full reveal">
+        <a class="frame" href="https://alexausma272319-cmd.github.io/Sevenframe_Level_Up/" target="_blank" rel="noopener noreferrer">
+          <div class="tex g7" style="background-image:url('');"></div>
+          <div class="frame-num">CAM_D / 007</div>
+          <div class="frame-info"><h3>SevenFrame: Level Up</h3><span class="frame-tag">Videojuego — Jugar ahora ↗</span></div>
+        </a>
+      </div>
+    </section>
+
+    <!-- CAPABILITIES -->
+    <section class="caps" id="estudio">
+      <div class="wrap">
+        <div class="section-head reveal" style="padding-top:0;">
+          <div class="eyebrow">Lo que hacemos</div>
+          <h2>Un estudio, cuatro disciplinas.</h2>
+        </div>
+        <div class="caps-grid reveal">
+          <div class="cap"><span class="cn">01</span><div><h4>Web</h4><p>Sitios y plataformas a la medida, diseñados y desarrollados en casa.</p></div></div>
+          <div class="cap"><span class="cn">02</span><div><h4>Audiovisual</h4><p>Cine de marca, documental y fotografía de campaña de punta a punta.</p></div></div>
+          <div class="cap"><span class="cn">03</span><div><h4>Diseño</h4><p>Identidad, branding y piezas gráficas con dirección de arte propia.</p></div></div>
+          <div class="cap"><span class="cn">04</span><div><h4>Animación</h4><p>Motion graphics y animación 2D/3D para cine, web y redes.</p></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TEAM -->
+    <section class="team" id="equipo">
+      <div class="wrap">
+        <div class="team-intro reveal">
+          <div>
+            <div class="eyebrow">El equipo</div>
+            <h2 style="font-family:var(--display); font-weight:400; text-transform:uppercase; font-size:clamp(32px,4.4vw,56px); line-height:1;">Cinco disciplinas.<br>Un solo estudio.</h2>
+          </div>
+          <p>Web, audiovisual, diseño gráfico y animación conviven bajo el mismo techo — sin subcontratar, sin fricción entre equipos.</p>
+        </div>
+
+        <!-- ════════════════════════════════════════════════════════════
+             FOTOS DEL EQUIPO — sube aquí el retrato de cada persona.
+             Reemplaza el url('') vacío de cada .member-photo por la
+             ruta de la foto, ej: url('imagenes/equipo/mateo.jpg')
+             ════════════════════════════════════════════════════════════ -->
+        <div class="team-grid reveal">
+          <div class="member">
+            <!-- FOTO1 -->
+            <div class="member-photo g1" style="background-image:url('foto-nicol.jpeg'); background-size:100% auto; background-position:center 48%; background-repeat:no-repeat; background-color:#0a0a0a;"><span class="member-frame-tag">Frame 01</span></div>
+            <div class="member-body">
+              <h4>Nicol Gutierrez</h4>
+              <div class="member-role"> Directora Creativa</div>
+              <p class="member-bio">Lidera cada proyecto, de la primera idea al último detalle.</p>
+            </div>
+          </div>
+          <div class="member">
+            <!-- FOTO2 -->
+            <div class="member-photo g3" style="background-image:url('foto-kevinn.jpeg'); background-size:100% auto; background-position:center 50%; background-repeat:no-repeat; background-color:#0a0a0a;"><span class="member-frame-tag">Frame 02</span></div>
+            <div class="member-body">
+              <h4>Kevinn Cepeda</h4>
+              <div class="member-role">Productor </div>
+              <p class="member-bio">Desarrolla pryectos web, asegurandose que cada proyecto sea óptimo.</p>
+            </div>
+          </div>
+          <div class="member">
+            <!-- FOTO3 -->
+            <div class="member-photo g5" style="background-image:url('foto-mariam.jpeg'); background-size:100% auto; background-position:center 45%; background-repeat:no-repeat; background-color:#0a0a0a;"><span class="member-frame-tag">Frame 03</span></div>
+            <div class="member-body">
+              <h4>Mariam Aguirre</h4>
+              <div class="member-role">Diseñadora Gráfica</div>
+              <p class="member-bio">Construye identidad y piezas gráficas que sostienen cada marca.</p>
+            </div>
+          </div>
+          <div class="member">
+            <!-- FOTO4 -->
+            <div class="member-photo g2" style="background-image:url('foto-saray.jpeg'); background-size:100% auto; background-position:center 48%; background-repeat:no-repeat; background-color:#0a0a0a;"><span class="member-frame-tag">Frame 04</span></div>
+            <div class="member-body">
+              <h4>Saray Martinez</h4>
+              <div class="member-role">Marketing Digital</div>
+              <p class="member-bio">Coordinadora de estrategias digitales y gestión de presencia en redes sociales.</p>
+            </div>
+          </div>
+          <div class="member">
+            <!-- FOTO5  -->
+            <div class="member-photo g6" style="background-image:url('foto-alexa.jpeg'); background-size:100% auto; background-position:center 50%; background-repeat:no-repeat; background-color:#0a0a0a;"><span class="member-frame-tag">Frame 05</span></div>
+            <div class="member-body">
+              <h4>Alexadra Gordillo</h4>
+              <div class="member-role">Animadora &amp; Motion Designer</div>
+              <p class="member-bio">Le da movimiento a cada pieza, del logo al video terminado.</p>
+            </div>
+          </div>
+          <a href="https://alexausma272319-cmd.github.io/Pagina-Rex/" target="_blank" rel="noopener noreferrer" class="member" aria-label="Ver la página de Rex, la mascota de SevenFrame">
+            <!-- FOTO6 — mascota de la productora -->
+            <div class="member-photo g4" style="background-image:url('https://alexausma272319-cmd.github.io/Pagina-Rex/visual/Rex.jpeg'); background-size:cover; background-position:center 30%; background-repeat:no-repeat; background-color:#0a0a0a;"><span class="member-frame-tag">Frame 06</span></div>
+            <div class="member-body">
+              <h4>Rex</h4>
+              <div class="member-role">Mascota oficial</div>
+              <p class="member-bio">Líder, creativo e inspirador. Representa la energía y unión detrás de cada proyecto del estudio.</p>
+            </div>
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ABOUT -->
+    <section class="about" id="nosotros">
+      <div class="wrap">
+        <div class="reveal">
+          <div class="about-label">Nosotros / 2026</div>
+          <!-- ════════════════════════════════════════════════════════
+               FOTO DE "NOSOTROS" — sube aquí la foto de equipo/estudio.
+               Reemplaza el url('') vacío por la ruta de la imagen,
+               ej: url('imagenes/equipo-sevenframe.jpg')
+               ════════════════════════════════════════════════════════ -->
+          <div class="about-photo g4" style="background-image:url('foto-grupal.jpeg');"></div>
+        </div>
+        <div class="reveal">
+          <p class="about-quote">Creemos que <span class="accent">un buen fotograma</span> vale más que un rollo entero de contenido genérico.</p>
+          <p class="about-foot">SEVENFRAME nació en Bogotá como un estudio pequeño con cámara prestada. Hoy diseñamos y desarrollamos sitios web, producimos cine de marca y fotografía, y animamos cada pieza para clientes en toda la región — todo bajo un mismo equipo compacto.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- CONTACT -->
+    <section class="contact" id="contacto">
+      <div class="wrap contact-inner reveal">
+        <div class="eyebrow">Hablemos</div>
+        <h2>Rodemos<br>algo juntos.</h2>
+        <a href="mailto:sevenframe777@gmail.com" class="contact-email">sevenframe777@gmail.com →</a>
+      </div>
+    </section>
+
+  </main>
+
+  <footer>
+    <div class="wrap">
+      <p>© 2026 SevenFrame Studio — Bogotá, Colombia</p>
+      <nav class="mi-navegacion">
+        <a href="https://instagram.com" target="_blank" rel="noopener noreferrer" class="instagram-link" >
+         <i class="fa-brands fa-instagram"></i>
+        </a>
+      </nav>
+    </div>
+  </footer>
+
+<script>
+  // header solid on scroll
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const header = document.getElementById('siteHeader');
+  const heroWrap = document.querySelector('.hero .wrap');
+  const reelFill = document.getElementById('reelFill');
+  const frames = document.querySelectorAll('.frame .tex');
+
+  function onScroll(){
+    const y = window.scrollY;
+    header.classList.toggle('solid', y > 40);
+
+    // hero parallax fade/scale
+    if (heroWrap){
+      const p = Math.min(y / 700, 1);
+      heroWrap.style.transform = `translateY(${p * 60}px) scale(${1 - p * 0.04})`;
+      heroWrap.style.opacity = 1 - p * 0.85;
+    }
+
+    // reel progress bar (page scroll)
+    const docH = document.documentElement.scrollHeight - window.innerHeight;
+    reelFill.style.width = (docH > 0 ? (y / docH) * 100 : 0) + '%';
+
+    // parallax on work frame images
+    frames.forEach(f => {
+      const rect = f.parentElement.getBoundingClientRect();
+      const center = rect.top + rect.height / 2 - window.innerHeight / 2;
+      const shift = Math.max(-40, Math.min(40, center * -0.06));
+      f.style.transform = `translateY(${shift}px)`;
+    });
+
+    // Los elementos .reveal se controlan con IntersectionObserver
+    // para que aparezcan al entrar en pantalla tanto al bajar como al subir.
+  }
+  window.addEventListener('scroll', onScroll, { passive:true });
+  window.addEventListener('resize', onScroll);
+  onScroll();
+
+  // custom viewfinder cursor
+  const cursor = document.getElementById('cursor');
+  if (window.matchMedia('(hover:hover)').matches){
+    window.addEventListener('mousemove', (e) => {
+      cursor.style.left = e.clientX + 'px';
+      cursor.style.top = e.clientY + 'px';
+      cursor.classList.add('show');
+    });
+    document.addEventListener('mouseleave', () => cursor.classList.remove('show'));
+    document.querySelectorAll('.frame, .member-photo').forEach(el => {
+      el.addEventListener('mouseenter', () => cursor.classList.add('big'));
+      el.addEventListener('mouseleave', () => cursor.classList.remove('big'));
+    });
+  }
+
+  // ===== carrusel de fotos (Larga Exposición, y cualquier otro que se agregue) =====
+  document.querySelectorAll('[data-carousel]').forEach(carousel => {
+    const track = carousel.querySelector('.carousel-track');
+    const slides = carousel.querySelectorAll('.carousel-slide');
+    const prevBtn = carousel.querySelector('.carousel-arrow.prev');
+    const nextBtn = carousel.querySelector('.carousel-arrow.next');
+    const counterEl = carousel.querySelector('.carousel-counter .current');
+    const total = slides.length;
+    let index = 0;
+    let timer = null;
+
+    function update(){
+      track.style.transform = `translateX(-${index * 100}%)`;
+      if (counterEl) counterEl.textContent = index + 1;
+    }
+    function go(delta){
+      index = (index + delta + total) % total;
+      update();
+    }
+    function startAutoplay(){
+      timer = setInterval(() => go(1), 4500);
+    }
+    function stopAutoplay(){
+      clearInterval(timer);
+    }
+
+    if (prevBtn) prevBtn.addEventListener('click', (e) => { e.stopPropagation(); go(-1); });
+    if (nextBtn) nextBtn.addEventListener('click', (e) => { e.stopPropagation(); go(1); });
+
+    carousel.addEventListener('mouseenter', stopAutoplay);
+    carousel.addEventListener('mouseleave', startAutoplay);
+
+    // swipe en móvil
+    let startX = 0;
+    track.addEventListener('touchstart', (e) => { startX = e.touches[0].clientX; stopAutoplay(); }, { passive:true });
+    track.addEventListener('touchend', (e) => {
+      const dx = e.changedTouches[0].clientX - startX;
+      if (Math.abs(dx) > 40) go(dx < 0 ? 1 : -1);
+      startAutoplay();
+    }, { passive:true });
+
+    update();
+    if (!reducedMotion) startAutoplay();
+  });
+
+  // mobile menu
+  const burger = document.getElementById('burger');
+  const mobileMenu = document.getElementById('mobileMenu');
+  function toggleMobileMenu(){
+    const isOpen = mobileMenu.classList.toggle('open');
+    burger.classList.toggle('active', isOpen);
+    burger.setAttribute('aria-label', isOpen ? 'Cerrar menú' : 'Abrir menú');
+    burger.setAttribute('title', isOpen ? 'Cerrar menú' : 'Abrir menú');
+  }
+
+  function closeMobileMenu(){
+    mobileMenu.classList.remove('open');
+    burger.classList.remove('active');
+    burger.setAttribute('aria-label', 'Abrir menú');
+    burger.setAttribute('title', 'Abrir menú');
+  }
+
+  burger.addEventListener('click', toggleMobileMenu);
+  burger.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      toggleMobileMenu();
+    }
+  });
+
+  mobileMenu.querySelectorAll('a').forEach(a => a.addEventListener('click', closeMobileMenu));
+
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') closeMobileMenu();
+  });
+
+  // rolling timecode HUD (24fps)
+  const tc = document.getElementById('timecode');
+  let frame = 0;
+  function pad(n){ return n.toString().padStart(2,'0'); }
+  function tick(){
+    frame++;
+    let f = frame % 24;
+    let totalSec = Math.floor(frame / 24);
+    let s = totalSec % 60;
+    let m = Math.floor(totalSec / 60) % 60;
+    let h = Math.floor(totalSec / 3600);
+    tc.textContent = `${pad(h)}:${pad(m)}:${pad(s)}:${pad(f)}`;
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+
+  // magnetic CTA buttons
+  document.querySelectorAll('.nav-cta').forEach(btn => {
+    btn.addEventListener('mousemove', (e) => {
+      const r = btn.getBoundingClientRect();
+      const x = (e.clientX - r.left - r.width/2) * 0.35;
+      const y = (e.clientY - r.top - r.height/2) * 0.5;
+      btn.style.transform = `translate(${x}px, ${y}px)`;
+    });
+    btn.addEventListener('mouseleave', () => { btn.style.transform = ''; });
+  });
+
+  // subtle tilt on capability + member cards
+  document.querySelectorAll('.cap, .member').forEach(card => {
+    card.addEventListener('mousemove', (e) => {
+      const r = card.getBoundingClientRect();
+      const px = (e.clientX - r.left) / r.width - 0.5;
+      const py = (e.clientY - r.top) / r.height - 0.5;
+      card.style.transform = `perspective(800px) rotateX(${py * -4}deg) rotateY(${px * 4}deg)`;
+    });
+    card.addEventListener('mouseleave', () => { card.style.transform = ''; });
+  });
+
+
+  // ===== reveal global: toda la página aparece al entrar/salir =====
+  // Se añaden automáticamente todos los elementos visuales importantes.
+  if (!reducedMotion){
+    const globalSelectors = [
+      'header .logo', 'header nav', 'header .burger',
+      '.marquee-wrap',
+      '.hero-frame-count', '.hero-sub', '.hero-meta',
+      '.work .frame',
+      '.caps .cap',
+      '.team .member',
+      '.about-photo', '.about-quote', '.about-foot',
+      '.contact .eyebrow', '.contact h2', '.contact-email',
+      'footer .wrap'
+    ];
+
+    const globalItems = document.querySelectorAll(globalSelectors.join(','));
+    globalItems.forEach((el, i) => {
+      if (!el.classList.contains('reveal')) {
+        el.classList.add('page-reveal');
+        el.style.transitionDelay = `${(i % 5) * 70}ms`;
+      }
+    });
+
+    const globalRevealObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        entry.target.classList.toggle('is-visible', entry.isIntersecting);
+      });
+    }, {
+      threshold: 0.08,
+      rootMargin: '0px 0px -5% 0px'
+    });
+
+    globalItems.forEach(el => globalRevealObserver.observe(el));
+  }
+
+  // ===== reveal: aparecer al entrar en pantalla =====
+  // Funciona al bajar y al subir. Al salir del viewport vuelve a ocultarse
+  // para que pueda aparecer otra vez cuando regreses.
+  const revealItems = document.querySelectorAll('.reveal');
+
+  if (!reducedMotion && revealItems.length){
+    const revealObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        entry.target.classList.toggle('is-visible', entry.isIntersecting);
+      });
+    }, {
+      threshold: 0.14,
+      rootMargin: '0px 0px -8% 0px'
+    });
+
+    revealItems.forEach(el => revealObserver.observe(el));
+  } else {
+    revealItems.forEach(el => el.classList.add('is-visible'));
+  }
+
+  // ===== project videos: reproducir al entrar en pantalla =====
+  const projectVideos = document.querySelectorAll('.project-video');
+
+  if (projectVideos.length){
+    const videoObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        const video = entry.target;
+
+        if (entry.isIntersecting){
+          video.play().catch(() => {});
+        } else {
+          video.pause();
+        }
+      });
+    }, {
+      threshold: 0.45
+    });
+
+    projectVideos.forEach(video => {
+      videoObserver.observe(video);
+
+      const soundButton = video.closest('.frame').querySelector('.frame-video-sound');
+
+      soundButton.addEventListener('click', () => {
+        video.muted = !video.muted;
+
+        soundButton.classList.toggle('muted', video.muted);
+        soundButton.setAttribute(
+          'aria-label',
+          video.muted ? 'Activar sonido' : 'Silenciar video'
+        );
+        soundButton.setAttribute(
+          'title',
+          video.muted ? 'Activar sonido' : 'Silenciar video'
+        );
+
+        if (video.paused) video.play().catch(() => {});
+      });
+    });
+  }
+
+  // reduced motion: keep content fully visible, static
+  if (reducedMotion) {
+    document.querySelectorAll('.reveal').forEach(el => {
+      el.classList.add('is-visible');
+      el.style.opacity = 1;
+      el.style.transform = 'none';
+    });
+  }
+</script>
+
+</body>
+</html>
